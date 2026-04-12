@@ -81,6 +81,10 @@ func _physics_process(delta):
 		if camera_attached:
 			_set_camera_lean(desired_inputs.get("lean"), delta)
 		
+		if shake_time > 0.0:
+			character_body.velocity += Vector3(randf_range(-1.0, 1.0), 0.0, randf_range(-1.0, 1.0)) * clampf(shake_time, 0.0, 1.0) * shake_magnitude * delta
+			shake_time -= delta
+		
 		if is_grounded:
 			_play_footstep_sounds(movement_dir.length() * current_speed, delta) 
 			if desired_inputs.get("jump"):
@@ -100,6 +104,8 @@ var stamina_loss_rate		: float = 0.22
 var stamina_recover_rate	: float = 0.4
 var stamina_recovered		: bool = true
 var stamina_recover_delay	: float = 2.0
+var shake_time				: float = 0.0
+var shake_magnitude			: float = 128.0
 
 func _get_move_speed(delta : float) -> float:
 		var _speed : float = speed
@@ -171,15 +177,8 @@ func _set_camera_lean(lean_input : float, delta : float) -> void:
 	camera.position.x			= move_toward(camera.position.x, lean_input * 0.32, delta * lean_speed)
 	camera.rotation_degrees.z	= move_toward(camera.rotation_degrees.z, -lean_input * 14.0, delta * lean_speed * 64.0)
 
-var shake_time		: float = 0.0
-var shake_magnitude	: float = 128.0
-
 func _process(delta: float) -> void:
 	time_passed += delta
-	
-	if shake_time > 0.0:
-		character_body.velocity += Vector3(randf_range(-1.0, 1.0), 0.0, randf_range(-1.0, 1.0)) * clampf(shake_time, 0.0, 1.0) * shake_magnitude * delta
-		shake_time -= delta
 	
 	if !is_alive:
 		var flash_colour := Color.RED * ((sin(time_passed * 10.0) / 2.0) + 1.0)

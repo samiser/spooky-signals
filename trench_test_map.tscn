@@ -4869,7 +4869,7 @@ func_godot_properties = {
 [node name="entity_7_point_light" parent="FuncGodotMap" unique_id=1846634398 instance=ExtResource("53_4cm40")]
 transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 7.75, -1.875, 0.25)
 light_color = Color(1, 0, 0, 1)
-light_energy = 2.4182742
+light_energy = 1.6500167
 light_volumetric_fog_energy = 4.0
 shadow_enabled = true
 omni_range = 8.0
