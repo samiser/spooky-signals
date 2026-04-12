@@ -33,7 +33,7 @@ var lean_speed			: float = 2.0
 
 var is_crouched			: bool = false
 var is_sprinting		: bool = false
-var released_crouch		: bool = false
+#var released_crouch		: bool = false
 var crouch_tween		: Tween
 
 var default_fov			: float
@@ -41,11 +41,12 @@ var zoom_fov			: float = 40.0
 var is_zoomed			: bool = false
 var zoom_tween			: Tween
 
-func _get_desired_inputs() -> Dictionary:
+func _get_desired_move_inputs() -> Dictionary:
 	var desired_move	: Vector2	= Input.get_vector("move_left", "move_right", "move_forward", "move_back")
 	var desired_lean	: float	= Input.get_axis("lean_left", "lean_right")
 	var desired_sprint	: bool	= Input.is_action_pressed("sprint")
 	var desired_jump	: bool	= Input.is_action_just_pressed("jump")
+	var desired_crouch	: bool	= Input.is_action_pressed("crouch")
 	
 	if !allow_control:
 		desired_move = Vector2.ZERO
@@ -56,7 +57,8 @@ func _get_desired_inputs() -> Dictionary:
 			"move"	: desired_move,
 			"lean"	: desired_lean,
 			"sprint": desired_sprint,
-			"jump"	: desired_jump
+			"jump"	: desired_jump,
+			"crouch": desired_crouch
 			}
 
 func _can_sprint(desired_move : Vector2) -> bool:
@@ -64,9 +66,17 @@ func _can_sprint(desired_move : Vector2) -> bool:
 
 func _physics_process(delta):
 	if !interacting:
-		var desired_inputs	: Dictionary	= _get_desired_inputs()
+		var desired_inputs	: Dictionary	= _get_desired_move_inputs()
 		var desired_move	: Vector2		= desired_inputs.get("move")
 		var desired_sprint	: bool			= desired_inputs.get("sprint")
+		var desired_crouch	: bool			= desired_inputs.get("crouch")
+		
+		if not interacting:
+			if desired_crouch:
+				if not is_crouched and not interacting:
+					_set_crouch(true)
+			elif is_crouched:
+				_set_crouch(false)
 		
 		var movement_dir = character_body.transform.basis * Vector3(desired_move.x, 0, desired_move.y)
 		
@@ -155,13 +165,12 @@ func _set_crouch(crouch : bool) -> void:
 				return
 			else:
 				checks += 1
-			
-		released_crouch = false
 
 	if crouch_tween != null && crouch_tween.is_running():
 		crouch_tween.stop()
 	
 	is_crouched = crouch
+
 	var body_height	: float = 1.8
 	var cam_height	: float = body_height - 0.1
 	
@@ -254,7 +263,7 @@ func _play_footstep_sounds(velocity : float, delta : float) -> void:
 # Player Camera Zoom
 #----------------------------------------------------
 
-func toggle_zoom() -> void:
+func _toggle_zoom() -> void:
 	if zoom_tween != null && zoom_tween.is_running():
 		zoom_tween.stop()
 	
@@ -265,12 +274,8 @@ func toggle_zoom() -> void:
 	zoom_tween.tween_property($Camera3D, "fov", zoom_level, 0.14)
 
 #----------------------------------------------------
-# Player Interacting
+# Player Mouse Control
 #----------------------------------------------------
-
-var interact_distance: float = 4.0
-var interacting: bool = false
-var current_interactable: Node3D 
 
 func _unhandled_input(event: InputEvent) -> void: # TODO: split this up more
 	if !allow_control:
@@ -292,22 +297,19 @@ func _unhandled_input(event: InputEvent) -> void: # TODO: split this up more
 	
 	if event.is_action_pressed("zoom"):
 		if not interacting:
-			toggle_zoom()
-	
-	if event.is_action_pressed("crouch"):
-		if not interacting:
-			_set_crouch(true)
-			released_crouch = false
-	if event.is_action_released("crouch"):
-		released_crouch = true
-	
-	if is_crouched && released_crouch:
-		if not interacting:
-			_set_crouch(false)
+			_toggle_zoom()
 	
 	if event.is_action_released("click"):
 		if interacting and current_interactable.has_method("on_release"):
 			current_interactable.on_release()
+
+#----------------------------------------------------
+# Player Interacting
+#----------------------------------------------------
+
+var interact_distance: float = 4.0
+var interacting: bool = false
+var current_interactable: Node3D 
 
 func stop_interacting() -> void:
 	interacting = false
