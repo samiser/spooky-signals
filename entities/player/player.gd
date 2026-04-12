@@ -1,102 +1,111 @@
-#extends CharacterBody3D
 extends Reciever
 class_name Player
 
-@onready var character_body: CharacterBody3D = $"."
+@onready var character_body	: CharacterBody3D = $"."
+@onready var camera			: Camera3D = $Camera3D
+var camera_attached			: bool = true
 
-var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
-
-var speed: int = 4
-var sprint_multiplier: float = 1.6
-var current_stamina : float = 1.0
-var current_stamina_delay : float = 0.0
-var stamina_loss_rate : float = 0.22
-var stamina_recover_rate : float = 0.4
-var stamina_recovered : bool = true
-var stamina_recover_delay : float = 2.0
-@onready var stamina_bar_default_colour : Color = $UI/VBoxContainer/Stamina/StaminaBar.get("theme_override_styles/fill").bg_color
-@onready var stamina_bar_default_border_colour : Color = $UI/VBoxContainer/Stamina/StaminaBar.get("theme_override_styles/fill").border_color
-
-var jump_speed: int = 4
-var crouch_time : float = 0.1
-var crouch_height := 1.1
-var default_height : float
-var mouse_sensitivity: float = 0.002
-
-var lean_speed : float = 2.0
-
-var default_fov : float
-var zoom_fov := 40.0
-var is_zoomed : bool = false
-var zoom_tween : Tween
-
-var is_crouched : bool = false
-var is_sprinting : bool = false
-var released_crouch : bool = false
-var crouch_tween : Tween
-
-var is_grounded : bool = true
-
-var allow_control : bool = true
-
-var camera_attached : bool = true
-
-var shake_time : float = 0.0
-var shake_magnitude : float = 128.0
-
-@export var generic_step_sounds : Array[AudioStream]
-var step_timer : float = 1.0
-var step_rate : float = 0.6
-
-var interact_distance: float = 4.0
-var interacting: bool = false
-var current_interactable: Node3D 
-
-var is_alive : bool = true
-var current_health : float = 100.0
-var health_bar_tween : Tween
-var damage_flash_tween : Tween
-
-@export var generic_dmg_sounds : Array[AudioStream]
-@export var die_sounds : Array[AudioStream]
-
-var next_subtitle_priority : int = 1
-var next_subtitle_time : float = 1.0
-
-var time_passed : float = 0.0
-
-@onready var camera: Camera3D = $Camera3D
-@onready var crosshair: TextureRect = $UI/Crosshair
-const CROSSHAIR_DEFAULT = preload("uid://ds24f6q1fxdn4")
-const CROSSHAIR_INTERACT = preload("uid://cfdaf0c0ferb1")
-
+var time_passed				: float = 0.0
 
 func _ready():
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-	connect_senders("player", signal_recieved)
+	
 	default_height = $CollisionShape3D.shape.height
 	default_fov = $Camera3D.fov
+	
 	$UI/locationLabel.text = ""
-		
-func _physics_process(delta):
-	character_body.velocity.y += -gravity * delta
-	if !interacting:
-		var input = Input.get_vector("move_left", "move_right", "move_forward", "move_back")
-		var lean_input : float = Input.get_axis("lean_left", "lean_right")
+	
+	connect_senders("player", signal_recieved)
 
-		if !allow_control:
-			input = Vector2.ZERO
-			lean_input = 0.0
+#----------------------------------------------------
+# Player Movement
+#----------------------------------------------------
+
+var allow_control		: bool = true
+var is_grounded			: bool = true
+var gravity				: float = ProjectSettings.get_setting("physics/3d/default_gravity")
+var jump_speed			: int = 4
+var crouch_time			: float = 0.1
+var crouch_height		: float = 1.1
+var default_height		: float # set in _ready
+var mouse_sensitivity	: float = 0.002
+var lean_speed			: float = 2.0
+
+var is_crouched			: bool = false
+var is_sprinting		: bool = false
+var released_crouch		: bool = false
+var crouch_tween		: Tween
+
+var default_fov			: float
+var zoom_fov			: float = 40.0
+var is_zoomed			: bool = false
+var zoom_tween			: Tween
+
+func _get_desired_inputs() -> Dictionary:
+	var desired_move	: Vector2	= Input.get_vector("move_left", "move_right", "move_forward", "move_back")
+	var desired_lean	: float	= Input.get_axis("lean_left", "lean_right")
+	var desired_sprint	: bool	= Input.is_action_pressed("sprint")
+	var desired_jump	: bool	= Input.is_action_just_pressed("jump")
+	
+	if !allow_control:
+		desired_move = Vector2.ZERO
+		desired_lean = 0.0
+		desired_sprint = false
+	
+	return {
+			"move"	: desired_move,
+			"lean"	: desired_lean,
+			"sprint": desired_sprint,
+			"jump"	: desired_jump
+			}
+
+func _can_sprint(desired_move : Vector2) -> bool:
+	return !is_crouched && is_grounded && desired_move != Vector2.ZERO && stamina_recovered
+
+func _physics_process(delta):
+	if !interacting:
+		var desired_inputs	: Dictionary	= _get_desired_inputs()
+		var desired_move	: Vector2		= desired_inputs.get("move")
+		var desired_sprint	: bool			= desired_inputs.get("sprint")
 		
-		var movement_dir = character_body.transform.basis * Vector3(input.x, 0, input.y)
+		var movement_dir = character_body.transform.basis * Vector3(desired_move.x, 0, desired_move.y)
 		
-		var current_speed := speed
-		
+		is_sprinting = desired_sprint && _can_sprint(desired_move)
 		is_grounded = character_body.is_on_floor()
 		
-		is_sprinting = !is_crouched && is_grounded && input != Vector2.ZERO && Input.is_action_pressed("sprint") && stamina_recovered
+		var current_speed : float = _get_move_speed(delta)
+		
+		character_body.velocity.x = movement_dir.x * current_speed
+		character_body.velocity.z = movement_dir.z * current_speed
+		
+		if camera_attached:
+			_set_camera_lean(desired_inputs.get("lean"), delta)
+		
+		if is_grounded:
+			_play_footstep_sounds(movement_dir.length() * current_speed, delta) 
+			if desired_inputs.get("jump"):
+				_jump()
+	else:
+		character_body.velocity.x = 0
+		character_body.velocity.z = 0
+	
+	character_body.velocity.y += -gravity * delta
+	character_body.move_and_slide()
+
+var speed					: int = 4
+var sprint_multiplier		: float = 1.6
+var current_stamina			: float = 1.0
+var current_stamina_delay	: float = 0.0
+var stamina_loss_rate		: float = 0.22
+var stamina_recover_rate	: float = 0.4
+var stamina_recovered		: bool = true
+var stamina_recover_delay	: float = 2.0
+
+func _get_move_speed(delta : float) -> float:
+		var _speed : float = speed
+
 		if is_sprinting:
-			current_speed *= sprint_multiplier
+			_speed *= sprint_multiplier
 			current_stamina -= stamina_loss_rate * delta
 			current_stamina_delay = stamina_recover_delay
 			if current_stamina <= 0.0:
@@ -110,49 +119,67 @@ func _physics_process(delta):
 						current_stamina += stamina_recover_rate * delta
 				else:
 					stamina_recovered = true
-				
-				if !stamina_recovered:
-					var flash_colour := Color.RED * ((sin(time_passed * 10.0) / 2.0) + 1.0)
-					$UI/VBoxContainer/Stamina/StaminaBar.get("theme_override_styles/background").border_color = flash_colour
-					$UI/VBoxContainer/Stamina/StaminaBar.get("theme_override_styles/fill").border_color = flash_colour
-				else:
-					$UI/VBoxContainer/Stamina/StaminaBar.get("theme_override_styles/background").border_color = stamina_bar_default_border_colour
-					$UI/VBoxContainer/Stamina/StaminaBar.get("theme_override_styles/fill").border_color = stamina_bar_default_border_colour
-		
-		var display_stamina_bar := current_stamina < 1.0
-		$UI/VBoxContainer/Stamina.visible = display_stamina_bar
-		
-		if display_stamina_bar:
-			var sprint_bar_colour : Color = Color(0.8, 0.3, 0.3, 1.0).lerp(stamina_bar_default_colour, current_stamina / 1.0)
-			$UI/VBoxContainer/Stamina/StaminaBar.get("theme_override_styles/fill").bg_color = sprint_bar_colour
-			$UI/VBoxContainer/Stamina/StaminaBar.value = current_stamina
-		
+			
 		if is_crouched && is_grounded:
-			current_speed = speed / 2.0
+			_speed = speed / 2.0
 		
-		character_body.velocity.x = movement_dir.x * current_speed
-		character_body.velocity.z = movement_dir.z * current_speed
-		
-		if camera_attached:
-			camera.position.x = move_toward(camera.position.x, lean_input * 0.32, delta * lean_speed)
-			camera.rotation_degrees.z = move_toward(camera.rotation_degrees.z, -lean_input * 14.0, delta * lean_speed * 64.0)
-		
-		if is_grounded:
-			_play_footstep_sounds(movement_dir.length() * current_speed, delta) 
-			if Input.is_action_just_pressed("jump"):
-				character_body.velocity.y = jump_speed
-	else:
-		character_body.velocity.x = 0
-		character_body.velocity.z = 0
+		return _speed
+
+func _jump() -> void:
+	character_body.velocity.y = jump_speed
+
+func _set_crouch(crouch : bool) -> void:
+	if !crouch: # standing up
+		var checks		: int = -1
+		var body_radius : float = $CollisionShape3D.shape.radius
+
+		while(checks < 4): # checks surrounding area of player if there's space to stand up
+			var check_point : Vector3 = Vector3.FORWARD.rotated(Vector3.UP, checks * (PI / 2))
+			check_point = check_point * body_radius
+			
+			if checks == -1: # check center
+				check_point = Vector3.ZERO
+				
+			check_point.y += crouch_height
+			
+			$StandRayCheck.position = check_point
+			$StandRayCheck.force_raycast_update()
+			
+			if $StandRayCheck.is_colliding():
+				return
+			else:
+				checks += 1
+			
+		released_crouch = false
+
+	if crouch_tween != null && crouch_tween.is_running():
+		crouch_tween.stop()
+	
+	is_crouched = crouch
+	var body_height	: float = 1.8
+	var cam_height	: float = body_height - 0.1
+	
+	if is_crouched:
+		body_height	= crouch_height
+		cam_height	= body_height - 0.1
+	
+	crouch_tween = get_tree().create_tween()
+	crouch_tween.tween_property($CollisionShape3D.shape, "height", body_height, crouch_time)
+	crouch_tween.tween_property(camera, "position:y", cam_height, crouch_time)
+
+func _set_camera_lean(lean_input : float, delta : float) -> void:
+	camera.position.x			= move_toward(camera.position.x, lean_input * 0.32, delta * lean_speed)
+	camera.rotation_degrees.z	= move_toward(camera.rotation_degrees.z, -lean_input * 14.0, delta * lean_speed * 64.0)
+
+var shake_time		: float = 0.0
+var shake_magnitude	: float = 128.0
+
+func _process(delta: float) -> void:
+	time_passed += delta
 	
 	if shake_time > 0.0:
 		character_body.velocity += Vector3(randf_range(-1.0, 1.0), 0.0, randf_range(-1.0, 1.0)) * clampf(shake_time, 0.0, 1.0) * shake_magnitude * delta
 		shake_time -= delta
-	
-	character_body.move_and_slide()
-
-func _process(delta: float) -> void:
-	time_passed += delta
 	
 	if !is_alive:
 		var flash_colour := Color.RED * ((sin(time_passed * 10.0) / 2.0) + 1.0)
@@ -160,6 +187,58 @@ func _process(delta: float) -> void:
 		$UI/VBoxContainer/Health/HealthBar.get("theme_override_styles/fill").border_color = flash_colour
 		
 	_set_crosshair_visibility()
+	_stamina_ui()
+
+#----------------------------------------------------
+# Player UI
+#----------------------------------------------------
+
+@onready var stamina_bar_default_colour			: Color = $UI/VBoxContainer/Stamina/StaminaBar.get("theme_override_styles/fill").bg_color
+@onready var stamina_bar_default_border_colour	: Color = $UI/VBoxContainer/Stamina/StaminaBar.get("theme_override_styles/fill").border_color
+
+func _stamina_ui() -> void:
+	if !stamina_recovered:
+		var flash_colour : Color = Color.RED * ((sin(time_passed * 10.0) / 2.0) + 1.0)
+		$UI/VBoxContainer/Stamina/StaminaBar.get("theme_override_styles/background").border_color = flash_colour
+		$UI/VBoxContainer/Stamina/StaminaBar.get("theme_override_styles/fill").border_color = flash_colour
+	else:
+		$UI/VBoxContainer/Stamina/StaminaBar.get("theme_override_styles/background").border_color = stamina_bar_default_border_colour
+		$UI/VBoxContainer/Stamina/StaminaBar.get("theme_override_styles/fill").border_color = stamina_bar_default_border_colour
+					
+	var display_stamina_bar : bool = current_stamina < 1.0
+	$UI/VBoxContainer/Stamina.visible = display_stamina_bar
+	
+	if display_stamina_bar:
+		var sprint_bar_colour : Color = Color(0.8, 0.3, 0.3, 1.0).lerp(stamina_bar_default_colour, current_stamina / 1.0)
+		$UI/VBoxContainer/Stamina/StaminaBar.get("theme_override_styles/fill").bg_color = sprint_bar_colour
+		$UI/VBoxContainer/Stamina/StaminaBar.value = current_stamina
+
+@onready var crosshair			: TextureRect = $UI/Crosshair
+@onready var crosshair_default	: Texture2D = load("res://ui/crosshair_default.png")
+@onready var crosshair_interact	: Texture2D = load("res://ui/crosshair_interact.png")
+
+func _set_crosshair_visibility() -> void:
+	if interacting || !camera_attached:
+		crosshair.hide()
+		$UI/interactLabel.text = ""
+		return
+	
+	crosshair.show()
+	if _looking_at_interactable():
+		crosshair.texture = crosshair_interact
+		if !is_zoomed:
+			$UI/interactLabel.text = _looking_at_interactable().name
+	else:
+		crosshair.texture = crosshair_default
+		$UI/interactLabel.text = ""
+
+#----------------------------------------------------
+# Player Footsteps
+#----------------------------------------------------
+
+@export var generic_step_sounds	: Array[AudioStream]
+var step_timer					: float = 1.0
+var step_rate					: float = 0.6
 
 func _play_footstep_sounds(velocity : float, delta : float) -> void:
 	step_timer -= velocity * step_rate * delta
@@ -172,34 +251,29 @@ func _play_footstep_sounds(velocity : float, delta : float) -> void:
 		$MovementSoundStream.pitch_scale = randf_range(0.9, 1.1)
 		$MovementSoundStream.play()
 
-func _set_crosshair_visibility() -> void:
-	if interacting || !camera_attached:
-		crosshair.hide()
-		$UI/interactLabel.text = ""
-		return
-	
-	crosshair.show()
-	if _looking_at_interactable():
-		crosshair.texture = CROSSHAIR_INTERACT
-		if !is_zoomed:
-			$UI/interactLabel.text = _looking_at_interactable().name
-	else:
-		crosshair.texture = CROSSHAIR_DEFAULT
-		$UI/interactLabel.text = ""
+#----------------------------------------------------
+# Player Camera Zoom
+#----------------------------------------------------
 
 func toggle_zoom() -> void:
 	if zoom_tween != null && zoom_tween.is_running():
 		zoom_tween.stop()
 	
-	var zoom_level : float = default_fov
 	is_zoomed = !is_zoomed
-	if is_zoomed:
-		zoom_level = zoom_fov
+	var zoom_level : float = zoom_fov if is_zoomed else default_fov
 		
 	zoom_tween = get_tree().create_tween()
 	zoom_tween.tween_property($Camera3D, "fov", zoom_level, 0.14)
 
-func _unhandled_input(event: InputEvent) -> void:
+#----------------------------------------------------
+# Player Interacting
+#----------------------------------------------------
+
+var interact_distance: float = 4.0
+var interacting: bool = false
+var current_interactable: Node3D 
+
+func _unhandled_input(event: InputEvent) -> void: # TODO: split this up more
 	if !allow_control:
 		return
 	
@@ -241,14 +315,14 @@ func stop_interacting() -> void:
 	current_interactable = null
 
 func _looking_at_interactable() -> Node3D:
-	var from := camera.global_transform.origin
-	var to := from + (-camera.global_transform.basis.z) * interact_distance
+	var from	: Vector3 = camera.global_transform.origin
+	var to		: Vector3 = from + (-camera.global_transform.basis.z) * interact_distance
 
-	var space_state := character_body.get_world_3d().direct_space_state
-	var query := PhysicsRayQueryParameters3D.create(from, to)
+	var space_state	: PhysicsDirectSpaceState3D = character_body.get_world_3d().direct_space_state
+	var query		: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(from, to)
 	query.exclude = [self]
 
-	var hit := space_state.intersect_ray(query)
+	var hit : Dictionary = space_state.intersect_ray(query)
 	if hit.is_empty():
 		return null
 
@@ -266,44 +340,16 @@ func _try_interact():
 		interactable.interact(self)
 		current_interactable = interactable
 
-func _set_crouch(crouch : bool) -> void:
-	if !crouch: # standing up
-		var checks := -1
-		var body_radius : float = $CollisionShape3D.shape.radius
+#----------------------------------------------------
+# Player Damage/Death
+#----------------------------------------------------
 
-		while(checks < 4): # checks surrounding area of player if there's space to stand up
-			var check_point :Vector3= Vector3.FORWARD.rotated(Vector3.UP, checks * (PI / 2))
-			check_point = check_point * body_radius
-			
-			if checks == -1: # check center
-				check_point = Vector3.ZERO
-				
-			check_point.y += crouch_height
-			
-			$StandRayCheck.position = check_point
-			$StandRayCheck.force_raycast_update()
-			
-			if $StandRayCheck.is_colliding():
-				return
-			else:
-				checks += 1
-			
-		released_crouch = false
-
-	if crouch_tween != null && crouch_tween.is_running():
-		crouch_tween.stop()
-	
-	is_crouched = crouch
-	var body_height := 1.8
-	var cam_height := body_height - 0.1
-	
-	if is_crouched:
-		body_height = crouch_height
-		cam_height = body_height - 0.1
-	
-	crouch_tween = get_tree().create_tween()
-	crouch_tween.tween_property($CollisionShape3D.shape, "height", body_height, crouch_time)
-	crouch_tween.tween_property(camera, "position:y", cam_height, crouch_time)
+@export var generic_dmg_sounds	: Array[AudioStream]
+@export var die_sounds			: Array[AudioStream]
+var is_alive					: bool = true
+var current_health				: float = 100.0
+var health_bar_tween			: Tween
+var damage_flash_tween			: Tween
 
 func apply_damage(amount : float) -> void:
 	if !is_alive:
@@ -350,9 +396,8 @@ func _die() -> void:
 	signal_recieved("player_fade_out")
 	
 	var cam_drop_tween := get_tree().create_tween()
-	var dead_cam_height = 0.1
-	if is_crouched:
-		dead_cam_height = 0.6
+	var dead_cam_height = 0.6 if is_crouched else 0.1
+
 	cam_drop_tween.tween_property(camera, "position:y", dead_cam_height, 0.6)
 	cam_drop_tween.parallel().tween_property(camera, "rotation_degrees:z", 20 * randi_range(-1, 1), 0.6)
 	
@@ -360,11 +405,11 @@ func _die() -> void:
 	_respawn()
 
 func _respawn() -> void:
-	allow_control = true
-	is_alive = true
-	current_health = 100.0
-	current_stamina = 1.0
-	current_stamina_delay = 0.0
+	allow_control			= true
+	is_alive				= true
+	current_health			= 100.0
+	current_stamina			= 1.0
+	current_stamina_delay	= 0.0
 	
 	if is_crouched:
 		_set_crouch(false)
@@ -381,8 +426,16 @@ func _respawn() -> void:
 	$UI/VBoxContainer/Health/HealthBar.get("theme_override_styles/fill").bg_color = stamina_bar_default_colour
 	$UI/VBoxContainer/Health/HealthBar.get("theme_override_styles/background").border_color = stamina_bar_default_border_colour
 
-func signal_recieved(parameters: String) -> void:
+#----------------------------------------------------
+# Player Signals
+#----------------------------------------------------
+
+var next_subtitle_priority	: int = 1
+var next_subtitle_time		: float = 1.0
+
+func signal_recieved(parameters: String) -> void: # TODO: Split this up more
 	var param_list : PackedStringArray = parameters.split(', ', false)
+	
 	for parameter in param_list:
 		match parameter:
 			"player_gravity_on":

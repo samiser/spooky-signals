@@ -1,4 +1,4 @@
-[gd_resource type="Theme" load_steps=6 format=3 uid="uid://c0eyo008u7c35"]
+[gd_resource type="Theme" format=3 uid="uid://c0eyo008u7c35"]
 
 [ext_resource type="FontFile" uid="uid://dad1xr0e0pnhr" path="res://fonts/NK57 Monospace Sc Bd.otf" id="1_7gxs5"]
 [ext_resource type="FontFile" uid="uid://diq1f4nx62ilc" path="res://fonts/NK57 Monospace Sc Bd It.otf" id="2_u8g5q"]

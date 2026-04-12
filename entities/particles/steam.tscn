@@ -1,4 +1,4 @@
-[gd_scene load_steps=9 format=3 uid="uid://hbvy4vswawl"]
+[gd_scene format=3 uid="uid://hbvy4vswawl"]
 
 [ext_resource type="Texture2D" uid="uid://dc1as5uuvjiut" path="res://meshes/map/beam_distortion.png" id="1_fch03"]
 
@@ -42,7 +42,7 @@ particles_anim_loop = false
 [sub_resource type="QuadMesh" id="QuadMesh_ftd62"]
 material = SubResource("StandardMaterial3D_trlvc")
 
-[node name="Steam" type="GPUParticles3D"]
+[node name="Steam" type="GPUParticles3D" unique_id=1685515335]
 gi_mode = 0
 visibility_range_end = 8.0
 visibility_range_end_margin = 2.0
