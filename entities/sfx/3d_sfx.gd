@@ -1,11 +1,12 @@
 extends Reciever
 signal send_signal
 
-@onready var sfx: AudioStreamPlayer3D = $"."
-@export var func_godot_properties : Dictionary
-var signal_ID : String
-var subtitle : String
-var subtitle_priority : int
+@onready var sfx					: AudioStreamPlayer3D = $"."
+@export var func_godot_properties	: Dictionary
+var signal_ID 						: String
+
+var subtitle 						: String
+var subtitle_priority 				: int
 
 func _ready() -> void:
 	signal_ID = func_godot_properties.get("signal_ID", "0")

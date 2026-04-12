@@ -1,9 +1,10 @@
 extends Reciever
 
-@export var func_godot_properties : Dictionary
-@onready var video_stream_player: VideoStreamPlayer = $Control/VideoStreamPlayer
+@export var func_godot_properties	: Dictionary
+var signal_ID 						: String
 
-var signal_ID : String
+@onready var video_stream_player	: VideoStreamPlayer = $Control/VideoStreamPlayer
+
 
 # Called when the node enters the scene tree for the first time.
 func _ready() -> void:

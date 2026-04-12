@@ -1,12 +1,12 @@
 @tool
 extends Reciever
 
-@export var func_godot_properties : Dictionary
-var signal_ID : String
+@export var func_godot_properties	: Dictionary
+var signal_ID						: String
 
-@onready var point_light: OmniLight3D = $"."
-var flicker_amount := 0.0
-var start_light_energy := 0.0
+@onready var point_light			: OmniLight3D = $"."
+var flicker_amount					: float = 0.0
+var start_light_energy				: float = 0.0
 
 func _ready() -> void:
 	signal_ID = func_godot_properties.get("signal_ID", "0")

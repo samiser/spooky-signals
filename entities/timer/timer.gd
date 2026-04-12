@@ -1,15 +1,15 @@
 extends Reciever
 signal send_signal
 
-@export var func_godot_properties : Dictionary
-var signal_ID : String
-var signal_parameter : String
+@export var func_godot_properties	: Dictionary
+var signal_ID 						: String
+var signal_parameter 				: String
 
-var time := 0.0
-var current_time := 0.0
-var triggered := false
-var is_stopped := false
-var loop := false
+var time			: float = 0.0
+var current_time	: float = 0.0
+var triggered		: bool = false
+var is_stopped		: bool = false
+var loop			: bool = false
 
 func _ready() -> void:
 	signal_ID = func_godot_properties.get("emit_signal_ID", "0")

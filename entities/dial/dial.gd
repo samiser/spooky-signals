@@ -4,17 +4,17 @@ class_name Dial
 var _active = false
 var _player: Player
 
-@export var max_value: float = 50.
-@export var min_value: float = 0.
-@export var value: float = 0.
-@export var step: float = 1.
+@export var max_value		: float = 50.0
+@export var min_value		: float = 0.0
+@export var value			: float = 0.0
+@export var step			: float = 1.0
 
 @export var drag_sensitivity: float = 0.1
 
-@export var screen: Screen
+@export var screen : Screen
 
-var max_rotation: float = -160
-var min_rotation: float = 160
+var max_rotation : float = -160.0
+var min_rotation : float = 160.0
 
 func _ready() -> void:
 	_update_rotation_from_value()

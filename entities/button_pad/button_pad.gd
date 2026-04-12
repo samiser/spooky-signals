@@ -1,18 +1,19 @@
 extends Reciever
 signal send_signal
 
-@export var func_godot_properties : Dictionary
-@onready var sound: AudioStreamPlayer3D = $Sound
-var signal_ID : String
-var recieve_signal_ID : String
-var signal_parameter : String
-var triggered := false
-var allowed := true
-var repeatable := true
+@export var func_godot_properties	: Dictionary
+@onready var sound					: AudioStreamPlayer3D = $Sound
 
-const BUTTON_SFX = preload("uid://bclrt04bifu2j")
-const ERROR_SFX = preload("uid://dn0p4unu86guy")
+@onready var button_sfx : AudioStream = load("res://audio/sfx/button.wav")
+@onready var error_sfx	: AudioStream = load("res://audio/sfx/error.wav")
 
+var signal_ID 						: String
+var recieve_signal_ID				: String
+var signal_parameter				: String
+
+var triggered						: bool = false
+var allowed							: bool = true
+var repeatable						: bool = true
 
 func _ready() -> void:
 	signal_ID = func_godot_properties.get("emit_signal_ID", "0")
@@ -29,11 +30,11 @@ func interact(player: Player) -> void:
 	if (!triggered || repeatable) && allowed:
 		send_signal.emit(signal_parameter)
 		triggered = true
-		sound.stream = BUTTON_SFX
+		sound.stream = button_sfx
 		if !repeatable:
 			$Screen.current_screen.set_text(" ")
 	else:
-		sound.stream = ERROR_SFX
+		sound.stream = error_sfx
 	
 	sound.play()
 
